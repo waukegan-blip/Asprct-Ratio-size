@@ -82,12 +82,10 @@
     .wrap {
       grid-template-columns: 380px minmax(0, 1fr);
       grid-template-areas:
-        "head head"
         "controls stage"
         "readouts stage";
       align-items: start;
     }
-    header { grid-area: head; }
     .controls { grid-area: controls; }
     .readouts { grid-area: readouts; }
     .stagewrap { grid-area: stage; position: sticky; top: 16px; }
@@ -279,12 +277,72 @@
     pointer-events: none;
   }
 </style>
+<style>
+  /* 影片 × 銀幕：兩個半透明方框疊在一起，橘色是影片，青色是銀幕 */
+  :root {
+    --film: #c2410c;
+    --film-fill: rgba(234, 88, 12, 0.40);
+    --scr: #0f766e;
+    --scr-fill: rgba(20, 184, 166, 0.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --film: #ffa05c;
+      --film-fill: rgba(255, 140, 60, 0.38);
+      --scr: #4fd1c0;
+      --scr-fill: rgba(60, 200, 180, 0.22);
+    }
+  }
+  :root[data-theme="dark"] {
+    --film: #ffa05c;
+    --film-fill: rgba(255, 140, 60, 0.38);
+    --scr: #4fd1c0;
+    --scr-fill: rgba(60, 200, 180, 0.22);
+  }
+  .top { max-width: 1060px; margin: 0 auto 20px; display: grid; gap: 14px; }
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); }
+  .tabs button {
+    font: 500 14px/1 var(--font-body);
+    color: var(--muted);
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 10px 14px;
+    margin-bottom: -1px;
+    cursor: pointer;
+  }
+  .tabs button[aria-current="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+  .seg4 { background: var(--line-strong); gap: 1px; }
+  .seg4 span { background: var(--surface); }
+  .seg4 label + label span { border-left: 0; }
+  .seg4 input:checked + span { background: var(--accent); color: var(--accent-ink); }
+  .c-screen, .c-film {
+    position: absolute;
+    transition: left .18s ease, top .18s ease, width .18s ease, height .18s ease;
+  }
+  .c-screen { background: var(--scr-fill); outline: 2px dashed var(--scr); outline-offset: 3px; }
+  .c-film { background: var(--film-fill); border: 2px solid var(--film); }
+  .c-tag { position: absolute; font: 500 12px/1 var(--font-mono); white-space: nowrap; pointer-events: none; }
+  .c-screen .c-tag { left: 8px; top: 8px; color: var(--scr); }
+  .c-film .c-tag { right: 8px; bottom: 8px; color: var(--film); }
+  @media (prefers-reduced-motion: reduce) { .c-screen, .c-film { transition: none; } }
+  .legend .cs { border: 2px dashed var(--scr); background: var(--scr-fill); }
+  .legend .cf { border: 2px solid var(--film); background: var(--film-fill); }
+  .cnote { margin: 12px 0 0; font-size: 14px; }
+</style>
 
-<main class="wrap">
+<div class="top">
   <header>
     <h1>畫幅對照尺</h1>
-    <p class="lede">輸入比例或解析度，看方框在這台裝置上有多大。</p>
+    <p class="lede" id="lede">輸入比例或解析度，看方框在這台裝置上有多大。</p>
   </header>
+  <nav class="tabs" aria-label="功能">
+    <button type="button" id="tabScreen" data-tab="screen" aria-current="true">螢幕方框</button>
+    <button type="button" id="tabCinema" data-tab="cinema" aria-current="false">影片 × 銀幕</button>
+  </nav>
+</div>
+
+<main class="wrap" id="viewScreen">
 
   <section class="controls panel" aria-label="輸入">
     <label for="spec">比例或解析度</label>
@@ -355,6 +413,54 @@
       <p class="fine">瀏覽器無法得知螢幕的實體尺寸，填入對角線吋數才能換算。</p>
     </details>
     <p class="device" id="device" style="margin-top:16px"></p>
+  </section>
+</main>
+
+<main class="wrap" id="viewCinema" hidden>
+  <section class="controls panel" aria-label="影片與銀幕">
+    <label for="film">影片畫幅</label>
+    <input id="film" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" value="2.39" placeholder="2.39　或　16:9　或　4096x1716">
+    <p id="filmMsg" class="msg" role="status" aria-live="polite"></p>
+    <div class="chips" id="filmChips"></div>
+    <p class="hint">也可以輸入比例（16:9）或影片解析度（4096x1716）。</p>
+
+    <div class="screen-block">
+      <label for="hall">影廳銀幕</label>
+      <input id="hall" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" value="1.43" placeholder="1.43　或　銀幕寬x高　例如 22x12">
+      <p id="hallMsg" class="msg" role="status" aria-live="polite"></p>
+      <div class="chips" id="hallChips"></div>
+      <p class="hint">IMAX 的銀幕比例依影廳不同，常見為 1.43 或 1.90。也可以輸入銀幕實際的寬x高，單位任意（例如公尺），會換算成比例。</p>
+    </div>
+
+    <div class="screen-block">
+      <div class="field-label">對照方式</div>
+      <div class="seg seg4" role="radiogroup" aria-label="對照方式">
+        <label><input type="radio" name="cfit" value="fit" checked><span>完整顯示</span></label>
+        <label><input type="radio" name="cfit" value="fill"><span>填滿銀幕</span></label>
+        <label><input type="radio" name="cfit" value="width"><span>同寬</span></label>
+        <label><input type="radio" name="cfit" value="height"><span>同高</span></label>
+      </div>
+      <p class="hint" id="cfitHint"></p>
+    </div>
+  </section>
+
+  <section class="stagewrap" aria-label="對照圖">
+    <div class="stage" id="cstage">
+      <div class="frame" id="cframe">
+        <div class="c-screen" id="cScr"><span class="c-tag" id="cTagS"></span></div>
+        <div class="c-film" id="cFilm"><span class="c-tag" id="cTagF"></span></div>
+      </div>
+    </div>
+    <ul class="legend">
+      <li><i class="cs"></i><span>影廳銀幕 <b id="lgHall"></b></span></li>
+      <li><i class="cf"></i><span>影片畫面 <b id="lgFilm"></b></span></li>
+    </ul>
+    <p class="cnote" id="cNote" aria-live="polite"></p>
+  </section>
+
+  <section class="readouts panel" aria-label="對照結果">
+    <h2>對照結果</h2>
+    <dl id="cout"></dl>
   </section>
 </main>
 
@@ -609,6 +715,166 @@
   }
   function closeOverlay() { $("overlay").hidden = true; }
 
+  // ---- 影片 × 銀幕 ----
+  var cfit = "fit";
+  var cLast = { f: null, h: null };
+  var FILMS = ["1.43", "1.66", "1.85", "1.90", "2.35", "2.39"];
+  var HALLS = [
+    { v: "1.43", t: "1.43 IMAX" },
+    { v: "1.90", t: "1.90 IMAX" },
+    { v: "1.85", t: "1.85 Flat" },
+    { v: "2.39", t: "2.39 Scope" }
+  ];
+  var CFIT_HINT = {
+    fit: "影片縮放到完整放進銀幕，不裁切，多出的空間是黑邊。",
+    fill: "影片放大到蓋滿整個銀幕，超出的部分會被裁掉。",
+    width: "影片和銀幕一樣寬。",
+    height: "影片和銀幕一樣高。"
+  };
+
+  function fr(r) { return (Math.round(r * 100) / 100).toFixed(2); }
+  function fn(n) { return String(Math.round(n * 100) / 100); }
+
+  function parseHall(raw) {
+    var s = normalize(raw);
+    if (!s) return { err: "請輸入銀幕比例（例如 1.85）或寬x高（例如 22x12）。" };
+    var m = s.match(/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/i);
+    if (m) {
+      var w = num(m[1]), h = num(m[2]);
+      if (!(w > 0 && h > 0)) return { err: "寬和高都要大於 0。" };
+      var r = w / h;
+      if (r < 0.1 || r > 10) return { err: "這個比例太極端，請檢查寬和高。" };
+      return { r: r, w: w, h: h, dims: true };
+    }
+    var p = parse(raw);
+    if (p.err) return { err: "格式看不懂。可以輸入 1.85、2.39:1，或銀幕寬x高（例如 22x12）。" };
+    return { r: p.r };
+  }
+
+  function buildCChips(hostId, items, inputId) {
+    var host = $(hostId);
+    items.forEach(function (it) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.dataset.v = it.v;
+      b.textContent = it.t;
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () { $(inputId).value = it.v; renderCinema(); });
+      host.appendChild(b);
+    });
+  }
+  function markCChips(hostId, r) {
+    var btns = $(hostId).querySelectorAll("button");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].setAttribute("aria-pressed", Math.abs(num(btns[i].dataset.v) - r) < 0.0005 ? "true" : "false");
+    }
+  }
+
+  function renderCinema() {
+    var fp = parse($("film").value);
+    var hp = parseHall($("hall").value);
+    $("filmMsg").textContent = fp.err || "";
+    $("hallMsg").textContent = hp.err || "";
+    if (fp.err) { fp = cLast.f; } else { cLast.f = fp; }
+    if (hp.err) { hp = cLast.h; } else { cLast.h = hp; }
+    if (!fp || !hp) return;
+
+    var rf = fp.r, rs = hp.r, hf;
+    if (cfit === "fit") hf = Math.min(1, rs / rf);
+    else if (cfit === "fill") hf = Math.max(1, rs / rf);
+    else if (cfit === "width") hf = rs / rf;
+    else hf = 1;
+    var wf = hf * rf;
+
+    // 以銀幕高度為 1 的相對尺寸作圖
+    var extW = Math.max(rs, wf), extH = Math.max(1, hf);
+    var availW = Math.max(120, $("cstage").clientWidth - 48);
+    var availH = Math.max(200, Math.min(innerHeight * 0.5, 420));
+    var k = Math.min(availW / extW, availH / extH);
+    var cf = $("cframe");
+    cf.style.width = (extW * k) + "px";
+    cf.style.height = (extH * k) + "px";
+    function place(el, w, h) {
+      el.style.left = ((extW - w) / 2 * k) + "px";
+      el.style.top = ((extH - h) / 2 * k) + "px";
+      el.style.width = (w * k) + "px";
+      el.style.height = (h * k) + "px";
+    }
+    place($("cScr"), rs, 1);
+    place($("cFilm"), wf, hf);
+    $("cTagS").textContent = "銀幕 " + fr(rs) + ":1";
+    $("cTagS").hidden = !(rs * k > 120 && k > 40);
+    $("cTagF").textContent = "影片 " + fr(rf) + ":1";
+    $("cTagF").hidden = !(wf * k > 120 && hf * k > 40);
+
+    $("lgHall").textContent = hp.dims ? fn(hp.w) + " × " + fn(hp.h) + "（" + fr(rs) + ":1）" : fr(rs) + ":1";
+    $("lgFilm").textContent = fr(rf) + ":1";
+    $("cfitHint").textContent = CFIT_HINT[cfit];
+
+    // 數值
+    var eps = 0.003;
+    var same = Math.abs(rf / rs - 1) < eps;
+    var ow = Math.min(wf, rs), oh = Math.min(hf, 1);
+    var cover = (ow * oh) / rs;
+    var used = (ow * oh) / (wf * hf);
+    var barTB = hf < 1 - eps ? (1 - hf) / 2 : 0;
+    var barLR = wf < rs * (1 - eps) ? (rs - wf) / 2 / rs : 0;
+    var cropLR = wf > rs * (1 + eps) ? (wf - rs) / 2 / wf : 0;
+    var cropTB = hf > 1 + eps ? (hf - 1) / 2 / hf : 0;
+
+    var parts = [];
+    if (barTB) parts.push("上下各有 " + P(barTB) + " 的黑邊");
+    if (barLR) parts.push("左右各有 " + P(barLR) + " 的黑邊");
+    if (cropLR) parts.push("左右各被裁掉 " + P(cropLR) + " 的畫面");
+    if (cropTB) parts.push("上下各被裁掉 " + P(cropTB) + " 的畫面");
+    $("cNote").textContent = same
+      ? "比例相同，兩個方框完全重疊。"
+      : (rf > rs ? "影片比銀幕更寬。" : "影片比銀幕更接近方形。") + (parts.length ? parts.join("，") + "。" : "");
+
+    var rows = [
+      ["影片畫幅", fr(rf) + " : 1", true],
+      ["銀幕比例", fr(rs) + " : 1" + (hp.dims ? "（" + fn(hp.w) + " × " + fn(hp.h) + "）" : ""), true],
+      ["畫面占銀幕", P(cover) + "（面積）"]
+    ];
+    if (used < 0.995) rows.push(["看得到的畫面", P(used)]);
+    if (barTB) rows.push(["上下黑邊", "各 " + P(barTB) + "（占銀幕高度）"]);
+    if (barLR) rows.push(["左右黑邊", "各 " + P(barLR) + "（占銀幕寬度）"]);
+    if (cropLR) rows.push(["左右裁切", "各 " + P(cropLR) + "（占畫面寬度）"]);
+    if (cropTB) rows.push(["上下裁切", "各 " + P(cropTB) + "（占畫面高度）"]);
+    if (hp.dims) rows.push(["畫面實際大小", fn(wf * hp.h) + " × " + fn(hf * hp.h) + "（與銀幕同單位）"]);
+    $("cout").innerHTML = rows.map(function (r) {
+      return "<div><dt>" + r[0] + "</dt><dd" + (r[2] ? ' class="strong"' : "") + ">" + r[1] + "</dd></div>";
+    }).join("");
+
+    markCChips("filmChips", rf);
+    markCChips("hallChips", rs);
+  }
+
+  function showTab(name) {
+    var cin = name === "cinema";
+    $("viewScreen").hidden = cin;
+    $("viewCinema").hidden = !cin;
+    $("tabScreen").setAttribute("aria-current", cin ? "false" : "true");
+    $("tabCinema").setAttribute("aria-current", cin ? "true" : "false");
+    $("lede").textContent = cin
+      ? "選影片畫幅和影廳銀幕，看兩者疊在一起會是什麼樣子。"
+      : "輸入比例或解析度，看方框在這台裝置上有多大。";
+    if (cin) renderCinema(); else render();
+  }
+
+  function initCinema() {
+    buildCChips("filmChips", FILMS.map(function (v) { return { v: v, t: v + ":1" }; }), "film");
+    buildCChips("hallChips", HALLS, "hall");
+    $("film").addEventListener("input", renderCinema);
+    $("hall").addEventListener("input", renderCinema);
+    document.querySelectorAll('input[name="cfit"]').forEach(function (r) {
+      r.addEventListener("change", function () { cfit = r.value; renderCinema(); });
+    });
+    document.querySelectorAll(".tabs button").forEach(function (b) {
+      b.addEventListener("click", function () { showTab(b.dataset.tab); });
+    });
+  }
+
   buildChips("ratioChips", RATIOS);
   buildChips("resChips", RES);
 
@@ -634,7 +900,9 @@
   $("openPreview").addEventListener("click", openOverlay);
   $("overlay").addEventListener("click", closeOverlay);
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeOverlay(); });
-  window.addEventListener("resize", function () { if ($("overlay").hidden) render(); else closeOverlay(); });
+  window.addEventListener("resize", function () {
+    if ($("overlay").hidden) { render(); renderCinema(); } else closeOverlay();
+  });
 
   try {
     var saved = localStorage.getItem("aspect-diag");
@@ -653,7 +921,8 @@
   } catch (e) {}
   if (!restored) setSrc("auto", false);
 
-  render();
+  initCinema();
+  showTab(location.hash === "#cinema" ? "cinema" : "screen");
 })();
 </script>
 
